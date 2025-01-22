@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 import plotly.express as px
 import dash
 from dash import dcc, html
@@ -7,44 +8,11 @@ from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 from wordcloud import WordCloud
 
-# Load JSON data into a single DataFrame
-dfs = [
-    "Streaming_History_Audio_2013-2020_0.json",
-    "Streaming_History_Audio_2020-2021_1.json",
-    "Streaming_History_Audio_2021-2022_2.json",
-    "Streaming_History_Audio_2022_3.json",
-    "Streaming_History_Audio_2022-2024_4.json",
-    "Streaming_History_Audio_2024_5.json",
-    "Streaming_History_Audio_2024_6.json",
-    "Streaming_History_Video_2024-2025.json",
-    "Streaming_History_Audio_2024-2025_7.json"
-]
-spotify_df = (pd.concat([pd.read_json(file) for file in dfs])
-              .assign(date=lambda x: pd.to_datetime(x['ts'].str.split("T").str[0]),
-                      year=lambda x: x['date'].dt.year,
-                      month=lambda x: x['date'].dt.month,
-                      hour=lambda x: x['ts'].str.split("T").str[1],
-                      mins_played=lambda x: (x['ms_played'].clip(lower=0) / (1000 * 60)).round(2))
-              .drop(['ts', 'ms_played', 'spotify_track_uri', 'episode_name', 'episode_show_name',
-                     'spotify_episode_uri', 'audiobook_title', 'audiobook_uri', 
-                     'audiobook_chapter_uri', 'audiobook_chapter_title', 'offline_timestamp'], axis=1)
-              .drop_duplicates()
-              .rename(columns={"master_metadata_track_name": "track_name",
-                               "master_metadata_album_artist_name": "artist_name",
-                               "master_metadata_album_album_name": "album_name"}))
-
-# Define day of the week and hour categories
-dayweek_list = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-hours_day = ['12 am', '1 am', '2 am', '3 am', '4 am', '5 am', '6 am', '7 am', '8 am', '9 am', '10 am',
-             '11 am', '12 pm', '1 pm', '2 pm', '3 pm', '4 pm', '5 pm', '6 pm', '7 pm', '8 pm', 
-             '9 pm', '10 pm', '11 pm']
-
-# Convert 'date' and 'hour' columns to categorical types with proper ordering
-spotify_df["day_of_week"] = pd.Categorical(spotify_df['date'].dt.day_name(), categories=dayweek_list, ordered=True)
-spotify_df['hour_played'] = pd.Categorical(spotify_df.hour.str[:2].astype(int).map(lambda x: hours_day[x]), categories=hours_day, ordered=True)
 
 # Filter data
-spotify_df = spotify_df.query("year >= 2020 and year <= 2024")
+df = pd.read_csv("spotify_data_clean.csv", parse_dates=['date']).drop("Unnamed: 0", axis=1)
+
+spotify_df = df.query("year >= 2020 and year <= 2024")
 
 external_stylesheets = [dbc.themes.SLATE, 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css']
 
@@ -219,13 +187,26 @@ def create_scatter_plot(data):
 
 
 def generate_word_cloud_image(text):
+    if len(text.split()) < 1:
+        raise ValueError("We need at least 1 word to plot a word cloud, got 0.")
     
-    wordcloud = WordCloud(max_words=50, background_color='white', colormap='YlGn').generate(text) # Convert WordCloud to array 
+    wordcloud = WordCloud(max_words=50, background_color='white', colormap='YlGn').generate(text) 
     img_array = wordcloud.to_array() 
     fig = px.imshow(img_array) 
-    fig.update_layout( xaxis=dict(showticklabels=False), yaxis=dict(showticklabels=False), margin=dict(l=0, r=0, t=0, b=0) ) 
+    fig.update_layout(
+        xaxis=dict(showticklabels=False), 
+        yaxis=dict(showticklabels=False), 
+        margin=dict(l=0, r=0, t=0, b=0)
+    ) 
     
     return fig
+
+def clean_text(text):
+    # Eliminar puntos suspensivos, guiones y cualquier cosa que no sea una palabra
+    text = re.sub(r'[^\w\s]', '', text)
+    
+    return text
+
 
 @app.callback(
     
@@ -321,18 +302,17 @@ def render_tab_content(active_tab, start_date, end_date):
     
     elif active_tab == "tab-5":
         
-        album_text_list = data_filtered['album_name'].tolist()
-        track_text_list = data_filtered['track_name'].tolist()
+        album_text_list = [str(item) for item in data_filtered['album_name'].tolist() if item is not None]
+        track_text_list = [str(item) for item in data_filtered['track_name'].tolist() if item is not None]
         
-        # Filtrar valores None
-        album_text_list = [item for item in album_text_list if item is not None]
-        track_text_list = [item for item in track_text_list if item is not None]
-        
-        # Unir los textos en una sola cadena
+        album_text_list = [clean_text(item) for item in album_text_list]
+        track_text_list = [clean_text(item) for item in track_text_list]
+
+
         album_text = ' '.join(album_text_list)
         track_text = ' '.join(track_text_list)
-        
-        # Generar las nubes de palabras
+
+
         word_cloud_album_fig = generate_word_cloud_image(album_text)
         word_cloud_track_fig = generate_word_cloud_image(track_text)
     
@@ -348,4 +328,5 @@ def render_tab_content(active_tab, start_date, end_date):
     return f"{total_artist_played:,}", f"{total_tracks_played:,}", f"{total_minutes_played:,}", f"{average_minutes_played:.2f}", tab_content
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, jupyter_mode='external' , port=8097)
+
