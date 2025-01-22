@@ -1,6 +1,5 @@
 pandas
 numpy
-re
 plotly.express 
 dash
 dash_bootstrap_components
