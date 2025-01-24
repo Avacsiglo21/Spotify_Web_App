@@ -327,6 +327,6 @@ def render_tab_content(active_tab, start_date, end_date):
 
     return f"{total_artist_played:,}", f"{total_tracks_played:,}", f"{total_minutes_played:,}", f"{average_minutes_played:.2f}", tab_content
 
-if __name__ == '__main__':
-    app.run_server(debug=True, jupyter_mode='external' , port=8097)
+# if __name__ == '__main__':
+#     app.run_server(debug=True, jupyter_mode='external' , port=8097)
 
