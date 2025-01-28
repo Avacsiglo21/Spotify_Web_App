@@ -145,7 +145,8 @@ def get_graphs(data_filtered):
     return fig1, fig2, fig3
 
 def create_area_chart(data):
-    fig = px.area(data, x='date', y='mins_played', 
+    grouped_data_area = data.groupby('date', as_index=False)['mins_played'].sum()
+    fig = px.area(grouped_data_area, x='date', y='mins_played', 
                   labels={'mins_played': 'Total Minutes Played', 'date':''}, template='presentation',
                   color_discrete_sequence=px.colors.qualitative.Dark2
                   
